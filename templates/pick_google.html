@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Which property?{% endblock %}
+
+{#
+  Both selects are optional and submit together. Either source on its own
+  is useful: Search Console gives the words people type, Analytics only
+  weights angles by how close they sit to a conversion.
+
+  This picker is the whole reason OAuth replaced service accounts. The
+  alternative asked someone to paste an email address into two separate
+  Google consoles, with no feedback if they got it wrong — the calls just
+  return empty.
+#}
+
+{% block content %}
+<h1>Which property?</h1>
+<p class="lede">
+  Pick the site and the analytics property. Either can be skipped.
+</p>
+
+<form method="post">
+
+  <p class="row-name" style="margin-bottom:8px">Search Console</p>
+  <div class="ledger">
+    {% for s in sites %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side">
+        <input type="radio" name="site" value="{{ s.url }}"
+               {% if loop.first %}checked{% endif %}>
+      </div>
+      <div class="row-main">
+        <div class="row-name">{{ s.label }}</div>
+      </div>
+    </label>
+    {% else %}
+    <div class="row">
+      <div class="row-main">
+        <div class="row-note">Nothing here this account can read.</div>
+      </div>
+    </div>
+    {% endfor %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side"><input type="radio" name="site" value=""></div>
+      <div class="row-main"><div class="row-note">Skip this</div></div>
+    </label>
+  </div>
+
+  <p class="row-name" style="margin:32px 0 8px">Analytics</p>
+  <div class="ledger">
+    {% for p in properties %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side">
+        <input type="radio" name="property" value="{{ p.id }}"
+               {% if loop.first %}checked{% endif %}>
+      </div>
+      <div class="row-main">
+        <div class="row-name">{{ p.label }}</div>
+        <div class="row-note mono">{{ p.id }}</div>
+      </div>
+    </label>
+    {% else %}
+    <div class="row">
+      <div class="row-main">
+        <div class="row-note">Nothing here this account can read.</div>
+      </div>
+    </div>
+    {% endfor %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side"><input type="radio" name="property" value=""></div>
+      <div class="row-main"><div class="row-note">Skip this</div></div>
+    </label>
+  </div>
+
+  <p style="margin-top:28px">
+    <button class="btn" type="submit">Continue</button>
+  </p>
+</form>
+{% endblock %}

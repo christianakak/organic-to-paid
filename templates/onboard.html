@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{#
+  Step order is load-bearing, not cosmetic.
+
+  Facebook connects first and the sync fires immediately, so real counts
+  are on screen before anything else is asked for. Every later request
+  then happens with evidence already visible. Reordering these, or
+  batching the asks onto one screen, removes the only proof the page has.
+#}
+
+{% block content %}
+
+<h1>Connect your sources</h1>
+<p class="lede">
+  This reads what your customers have already said to you — posts,
+  comments, searches, reviews — and turns the recurring ones into
+  advertising angles. Read-only. Nothing is posted or changed.
+</p>
+
+{% if status.total %}
+<div class="tally">
+  <div>
+    <span class="tally-n">{{ status.total }}</span>
+  </div>
+  <div>
+    <div class="tally-label">
+      pieces of your own signal found
+      {%- if status.syncing %}, still counting{% endif %}
+    </div>
+    {% if status.total >= 25 %}
+    <div class="tally-note">That's already enough to work with.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="ledger">
+
+  {# ---- Step 1: Meta. Required. ------------------------------- #}
+  <div class="row{% if status.meta.connected %} is-done{% endif %}">
+    <div class="row-main">
+      <div class="row-name">Facebook &amp; Instagram</div>
+      {% if status.meta.connected %}
+        <div class="row-note">
+          {{ status.meta.posts }} posts, {{ status.meta.comments }} comments.
+          The comments are the valuable half.
+        </div>
+      {% elif status.meta.error %}
+        <div class="error">{{ status.meta.error }}</div>
+      {% else %}
+        <div class="row-note">Connect Facebook to start.</div>
+      {% endif %}
+    </div>
+    <div class="row-side">
+      {% if status.meta.needs_picker %}
+        <a class="btn" href="/connect/meta/pick">Choose a page</a>
+      {% elif not status.meta.connected %}
+        <a class="btn" href="/connect/meta">Connect</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if not status.meta.connected %}
+    <a class="delegate" href="/delegate/meta">Someone else manages this →</a>
+  {% endif %}
+
+  {# ---- Step 2: Google. Optional. ----------------------------- #}
+  <div class="row{% if status.google.connected %} is-done{% endif %}">
+    <div class="row-main">
+      <div class="row-name">
+        Search Console &amp; Analytics
+        <span class="tag-optional">optional</span>
+      </div>
+      {% if status.google.connected %}
+        <div class="row-note">
+          {{ status.google.queries }} search terms — the words people
+          actually type.
+        </div>
+      {% elif status.google.error %}
+        <div class="error">{{ status.google.error }}</div>
+      {% else %}
+        <div class="row-note">
+          Adds what people searched for before they found you.
+        </div>
+      {% endif %}
+    </div>
+    <div class="row-side">
+      {% if status.google.needs_picker %}
+        <a class="btn btn-quiet" href="/connect/google/pick">Choose a property</a>
+      {% elif not status.google.connected %}
+        <a class="btn btn-quiet" href="/connect/google">Connect</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if not status.google.connected %}
+    <a class="delegate" href="/delegate/google">Someone else manages this →</a>
+  {% endif %}
+
+  {# ---- Step 3: files. Optional, no OAuth. -------------------- #}
+  <div class="row{% if status.transcripts or status.reviews %} is-done{% endif %}">
+    <div class="row-main">
+      <div class="row-name">
+        Call recordings &amp; reviews
+        <span class="tag-optional">optional</span>
+      </div>
+      <div class="row-note">
+        {% if status.transcripts or status.reviews %}
+          {{ status.transcripts }} transcript turns,
+          {{ status.reviews }} reviews.
+        {% else %}
+          Sales calls are the single richest source here — objections said
+          out loud. Send them over and they get added.
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="foot">
+  Read-only access. Revoke any time from Facebook or Google settings.
+</p>
+
+{% endblock %}
+
+{% block script %}
+{#
+  Poll only while a sync is running, so the tally climbs while someone is
+  looking at it. That climb is the payoff the whole step order exists to
+  deliver — it stops the moment there is nothing to show.
+#}
+{% if status.syncing %}
+<script>
+  (function () {
+    var stop = setInterval(function () {
+      fetch("/status")
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (!s.syncing) { clearInterval(stop); }
+          location.reload();
+        })
+        .catch(function () { clearInterval(stop); });
+    }, 3000);
+  })();
+</script>
+{% endif %}
+{% endblock %}

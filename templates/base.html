@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Connect your sources{% endblock %}</title>
+<style>
+/*
+ * Onboarding design system.
+ *
+ * Deliberately not the Caldera brand used for the angle bank. This page's
+ * job is to not spook someone mid-OAuth; the deliverable's job is to look
+ * like a deliverable. Different jobs, different systems.
+ *
+ * The rule here: colour carries state and nothing else. Teal means
+ * connected, clay means something went wrong, everything else is ink on
+ * paper. If a colour is doing decoration it is a bug.
+ */
+:root {
+  --paper:  #F7F7F5;   /* page */
+  --ink:    #16191D;   /* text */
+  --muted:  #6B7076;   /* secondary text */
+  --rule:   #E2E1DC;   /* hairlines */
+  --teal:   #0F6E63;   /* connected. only. */
+  --clay:   #A8543C;   /* error. only. */
+
+  --gap: 20px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 16px/1.55 ui-sans-serif, system-ui, -apple-system,
+        "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 64px 24px 96px;
+}
+
+h1 {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.lede {
+  color: var(--muted);
+  margin: 0 0 40px;
+  max-width: 46ch;
+}
+
+/* --- The tally -------------------------------------------------- */
+/*
+ * The one bold element on the page. The entire pitch is "you already
+ * have this data", and a number proves that faster than any paragraph
+ * can. Everything else stays quiet so this doesn't have to shout.
+ */
+.tally {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 28px 0;
+  margin: 0 0 var(--gap);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.tally-n {
+  font-size: 56px;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.tally-label { color: var(--muted); }
+.tally-note { color: var(--teal); font-size: 14px; margin-top: 6px; }
+
+/* --- Ledger rows ------------------------------------------------ */
+/*
+ * Rows, not cards. Cards would imply the sources are equivalent choices
+ * you pick between. They aren't — Facebook is required, the rest are
+ * additive, and the layout should say so.
+ */
+.ledger { border-top: 1px solid var(--rule); }
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.row-main { flex: 1; min-width: 0; }
+.row-name { font-weight: 500; }
+.row-note { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.row-side { flex: none; padding-top: 2px; }
+
+.row.is-done .row-name::after {
+  content: " · connected";
+  color: var(--teal);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.tag-optional {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* --- Controls --------------------------------------------------- */
+.btn {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+  font-size: 15px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+}
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
+.delegate {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.delegate:hover { color: var(--ink); }
+
+.error {
+  color: var(--clay);
+  border-left: 2px solid var(--clay);
+  padding-left: 12px;
+  margin: 24px 0;
+}
+
+code, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+.copyfield {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.foot {
+  margin-top: 40px;
+  color: var(--muted);
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+{% block content %}{% endblock %}
+</div>
+{% block script %}{% endblock %}
+</body>
+</html>

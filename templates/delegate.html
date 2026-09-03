@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Hand this step to someone else{% endblock %}
+
+{#
+  The commonest reason onboarding dies is not unwillingness — it is that
+  the person clicking doesn't hold the credentials. The owner says yes,
+  opens the Google step, and discovers their web agency has the access.
+
+  This link connects that one source and lands the delegate nowhere else,
+  so the owner never restarts. The pre-written message is here because
+  asking someone to compose the ask is another place they stop.
+#}
+
+{% block content %}
+<h1>Send this to whoever manages {{ label }}</h1>
+<p class="lede">
+  They connect that one thing and nothing else. Single use, read-only,
+  and you don't have to start over.
+</p>
+
+<label class="row-note" for="link">Link</label>
+<input class="copyfield mono" id="link" value="{{ link }}" readonly
+       onclick="this.select()">
+
+<p class="row-note" style="margin-top:28px">Something to paste with it</p>
+<textarea class="copyfield" rows="5" readonly onclick="this.select()">Hi — could you connect our {{ label }} to this? It's read-only access, it takes about a minute, and it's a single-use link so it won't work for anyone else: {{ link }}</textarea>
+
+<p style="margin-top:32px"><a class="btn btn-quiet" href="/">Back</a></p>
+{% endblock %}

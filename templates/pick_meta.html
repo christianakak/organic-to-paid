@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Which page?{% endblock %}
+
+{#
+  Only reached when someone admins more than one page — the single-page
+  case is auto-selected in onboard.pick_meta rather than shown here.
+  Nobody should have to choose from a list of one.
+#}
+
+{% block content %}
+<h1>Which page?</h1>
+<p class="lede">
+  Pick the one you run ads for. Its Instagram account comes with it.
+</p>
+
+<form method="post">
+  <div class="ledger">
+    {% for p in pages %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side">
+        <input type="radio" name="page_id" value="{{ p.id }}"
+               {% if loop.first %}checked{% endif %}>
+      </div>
+      <div class="row-main">
+        <div class="row-name">{{ p.name }}</div>
+        <div class="row-note">
+          {% if p.ig_username %}
+            Instagram: @{{ p.ig_username }}
+          {% elif p.ig_id %}
+            Instagram account linked
+          {% else %}
+            No Instagram account linked to this page
+          {% endif %}
+        </div>
+      </div>
+    </label>
+    {% endfor %}
+  </div>
+
+  <p style="margin-top:28px">
+    <button class="btn" type="submit">Use this page</button>
+  </p>
+</form>
+{% endblock %}
