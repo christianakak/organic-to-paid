@@ -192,6 +192,16 @@ def resolve_business_unit(api_key, domain):
     if not domain:
         return None, "no domain given"
 
+    # Two endpoints, tried in that order. `find` matches an exact domain
+    # and returns one unit; `search` is fuzzy and returns a list. Which
+    # of them a given API plan exposes is not something worth guessing
+    # at from documentation, and the cost of trying both is one request
+    # in the uncommon case.
+    #
+    # Exact first, deliberately: a fuzzy search for "bty" would happily
+    # return somebody else's business, and storing the wrong business
+    # unit id would pull a competitor's reviews into the corpus without
+    # anything looking wrong.
     r = requests.get(
         "https://api.trustpilot.com/v1/business-units/find",
         params={"apikey": api_key, "name": domain},
@@ -199,16 +209,38 @@ def resolve_business_unit(api_key, domain):
     )
     if r.status_code == 401:
         return None, "API key rejected"
-    if r.status_code == 404:
-        return None, f"no Trustpilot profile found for {domain}"
+    if r.status_code == 200:
+        data = r.json()
+        if data.get("id"):
+            return data["id"], data.get("displayName") or domain
+
+    r = requests.get(
+        "https://api.trustpilot.com/v1/business-units/search",
+        params={"apikey": api_key, "query": domain},
+        timeout=30,
+    )
+    if r.status_code == 401:
+        return None, "API key rejected"
     if r.status_code != 200:
         return None, f"Trustpilot {r.status_code}: {r.text[:200]}"
 
-    data = r.json()
-    unit_id = data.get("id")
-    if not unit_id:
-        return None, f"no business unit in the response for {domain}"
-    return unit_id, data.get("displayName") or domain
+    units = r.json().get("businessUnits") or []
+    if not units:
+        return None, f"no Trustpilot profile found for {domain}"
+
+    # Prefer a unit whose identifying name is the domain itself. Only
+    # fall back to the first fuzzy hit when nothing matches exactly, and
+    # say so, because that is the case most likely to be wrong.
+    for unit in units:
+        name = (unit.get("name") or {}).get("identifying", "").lower()
+        if name == domain and unit.get("id"):
+            return unit["id"], unit.get("displayName") or domain
+
+    best = units[0]
+    if not best.get("id"):
+        return None, f"no usable business unit for {domain}"
+    return best["id"], (f"{best.get('displayName') or domain} "
+                        f"(closest match — check this is you)")
 
 
 def pull_trustpilot(conn, account):

@@ -1,7 +1,10 @@
 # Secrets — never commit
 .env
 .env.*
-!.env.example
+# The template ships as env.example, without the leading dot, so it is
+# not matched by the patterns above and needs no negation. If you ever
+# rename it to .env.example, restore `!.env.example` here or it vanishes
+# from the repo silently.
 service-account.json
 *.pem
 *.key

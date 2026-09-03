@@ -36,22 +36,34 @@ where.
 
 ## Run it
 
+There is no usable bare `python` on this machine — the system one is 3.9
+and this needs 3.12. Every command below uses the venv interpreter
+explicitly, and so should you.
+
 ```bash
 uv venv --python 3.12 && uv pip install -r requirements.txt
 
-python run.py --account bty setup            # once per machine
-python run.py --account bty connect          # once per account
-python run.py --account bty doctor           # before every pull
-python run.py --account self pull
-python run.py --account self estimate        # what claims will cost
-python run.py --account self claims --limit 200
-python run.py --account self score --top 20
-python run.py --account self brief --top 5
+# One account slug throughout. Credentials are stored per account, so
+# connecting as `bty` and pulling as `self` gives you an empty pull
+# against an account that was never connected.
+ACCT=bty
 
-python onboard.py --account acme    # client onboarding on :5000
+.venv/bin/python run.py --account $ACCT setup      # once per machine
+.venv/bin/python run.py --account $ACCT connect    # once per account
+.venv/bin/python run.py --account $ACCT doctor     # before every pull
+.venv/bin/python run.py --account $ACCT pull
+.venv/bin/python run.py --account $ACCT estimate   # what claims will cost
+.venv/bin/python run.py --account $ACCT claims --limit 200
+.venv/bin/python run.py --account $ACCT score --top 20
+.venv/bin/python run.py --account $ACCT brief --top 5
 
-for t in tests/test_*.py; do python "$t" || break; done
+./run-tests.sh
 ```
+
+**Use `./run-tests.sh`, not a shell loop.** The obvious
+`for t in tests/*.py; do python "$t" || break; done` exits 0 whether or
+not a test failed — `break` succeeds — so a red suite and a green one
+are indistinguishable. That loop was in this file until 2026-09-03.
 
 `doctor` comes first because Google answers a wrongly identified property
 with an empty result set rather than an error — a misconfigured pull

@@ -14,11 +14,22 @@ Nothing here needs credentials to run the tests. `doctor`, `pull`,
 ## Tests
 
 ```bash
-for t in tests/test_*.py; do python "$t" || break; done
+./run-tests.sh
 ```
 
-Plain asserts, no framework. Each file is runnable on its own and prints
-what it proved.
+Exits non-zero if any suite failed. Use it rather than a shell loop: the
+obvious `for t in ...; do python "$t" || break; done` exits 0 either way,
+because `break` succeeds. That loop was in this file, presented as the
+way to verify the suite, until 2026-09-03.
+
+**Plain asserts, no framework, and that is a decision rather than an
+absence.** Every file is runnable on its own with nothing installed but
+the app's own dependencies, prints what it proved rather than a dot, and
+fails with a sentence explaining what the failure means. `pyproject.toml`
+and the CI workflow both exist and neither implies a half-finished pytest
+migration. Adding pytest would cost the individually-runnable property
+and the explanatory failure messages, which are the two things making
+these useful when something breaks a year from now.
 
 | File | What it holds down |
 |---|---|

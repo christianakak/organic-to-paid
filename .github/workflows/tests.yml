@@ -18,16 +18,10 @@ jobs:
       - name: Install
         run: uv pip install --system -r requirements.txt
 
-      # Plain asserts, no framework. Each file is runnable on its own and
-      # prints what it proved; `set -e` plus the loop means the first
-      # failure stops the job with that file's own message on screen.
+      # One canonical invocation, shared with local runs, so CI and a
+      # developer's terminal cannot disagree about what passing means.
       - name: Run tests
-        run: |
-          set -e
-          for t in tests/test_*.py; do
-            echo "--- $t"
-            python "$t"
-          done
+        run: PY=python ./run-tests.sh
 
       # Nothing under data/, out/ or private/ is ever meant to be in the
       # repo, and .gitignore covering them is not the same as checking.
