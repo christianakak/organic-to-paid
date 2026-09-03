@@ -35,24 +35,30 @@ never connected — which is indistinguishable from a broken adapter.
 |---|---|
 | Repo | `/Users/christiank/organic-to-paid` |
 | Branch | `feat/bootstrap-angle-engine` — the only branch that exists |
-| Head at writing | `9ab93b7` |
+| Head at writing | `3009a82` |
 | Remote | `origin` → `https://github.com/christianakak/organic-to-paid` |
-| Pushed | **Nothing, from this machine.** `git for-each-ref refs/remotes` is empty. |
-| `main` | **Does not exist as a ref.** `git show-ref` returns one line and it is the feature branch. |
+| Pushed | **Yes**, 2026-09-03. Remote and local are both at `3009a82`. |
+| `main` | **Does not exist**, locally or on the remote. |
 | Python | 3.12 via `uv`. System python is 3.9 and will not work. |
 
 Two traps in that table, both of which have already caught someone:
 
-**The remote exists.** An earlier version of this file said it did not, because whoever
-wrote it checked for the `gh` CLI (genuinely absent) and inferred no remote instead of
-running `git remote -v`. Do not offer to create a remote. Ask Chris what is already at that
-URL — this machine has never fetched it, so its contents and visibility are unknown here.
+**The remote exists and has been pushed to.** An earlier version of this file said there was
+no remote, because whoever wrote it checked for the `gh` CLI (genuinely absent) and inferred
+it instead of running `git remote -v`. The repository was completely empty before
+2026-09-03 — `git ls-remote` returned nothing — so the push collided with nothing. Do not
+offer to create a remote.
 
-**`main` is leftover config, not a branch.** `.git/config` carries `branch.main.remote` and
-`branch.main.merge`, and the session-start git snapshot reports `Current branch: main`, so
-you will be told twice that `main` exists. There is no `refs/heads/main`. `git switch main`
-finds nothing. The standing rule about never committing to a default branch has nothing to
-attach to here.
+**`main` does not exist anywhere, and the feature branch is currently GitHub's default.**
+There is no `refs/heads/main` locally or on the remote; `git switch main` finds nothing. But
+`.git/config` carries leftover `branch.main.remote` and `branch.main.merge` keys, and the
+session-start git snapshot reports `Current branch: main`, so you will be told twice that a
+branch exists which no ref backs.
+
+Because `feat/bootstrap-angle-engine` was the first thing pushed, GitHub made it the default
+branch. **That is an open decision for Chris** (see the last section), not something to fix
+unilaterally — creating `main` from unreviewed work is his call. The standing rule about
+never committing to a default branch currently has nothing to attach to.
 
 ### Run the tests
 
@@ -61,7 +67,7 @@ cd /Users/christiank/organic-to-paid
 ./run-tests.sh
 ```
 
-Exits non-zero if any suite failed. **Ten suites passed at `9ab93b7` on 2026-09-03.**
+Exits non-zero if any suite failed. **Ten suites passed at `3009a82` on 2026-09-03.**
 
 Do not substitute a shell loop. `for t in tests/*.py; do python "$t" || break; done` exits 0
 whether or not a test failed, because `break` succeeds — and piping it to `tail`, which
@@ -368,10 +374,15 @@ not.
 ## Open with Chris
 
 - **Has `setup` been run?** Blocks everything live.
-- **`origin` already points at `github.com/christianakak/organic-to-paid`.** Is that yours, is
-  it private, and has anything been pushed to it from another machine? Nothing has been
-  pushed from here and this machine has never fetched it, so its contents are unknown.
-  Do not offer to create a remote — one exists.
+- **Is `github.com/christianakak/organic-to-paid` public or private?** It was empty before
+  2026-09-03 and now holds this branch. Nothing sensitive is tracked — that was checked
+  against the tracked file list and by grepping every tracked file for key-shaped strings
+  before pushing — but `private/business-plan.md` sits untracked inside the working tree and
+  names a third party's equity arrangement. One `git add -f` away from being world-readable.
+- **How should `main` come to exist?** Right now the feature branch is GitHub's default,
+  because it was pushed into an empty repo. Either merge it through a PR in the browser,
+  which creates `main` and leaves a review trail, or push it as `main` directly. His call —
+  it makes a default branch out of unreviewed work either way.
 - **Which Gmail label holds customer threads?** It must exist and have messages in it before
   connecting, or the tool will correctly report the label as empty.
 - **Model choice for extraction**, after seeing `estimate` output. His call, still open.
