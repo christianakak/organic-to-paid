@@ -162,6 +162,23 @@ for text in DROP:
         f"the filter passed something worth no money: {text!r}"
 print(f"PASS: all {len(DROP)} junk cases are dropped before the API")
 
+# The single-word rule is about comments. A one-word search query, or a
+# page titled "Størrelsesguide", is not praise — it is unambiguous
+# evidence of a concern, and it comes from the sources that make an
+# angle cross-source in the first place. Dropping those would bias the
+# corpus toward comments, which is the exact failure the diversity
+# weighting exists to prevent.
+for kind in ("query", "page"):
+    assert claims.is_extractable("Størrelsesguide", kind), \
+        f"a one-word {kind} is signal, not praise"
+    assert claims.is_extractable("passform", kind)
+assert not claims.is_extractable("Størrelsesguide", "comment"), \
+    "the single-word rule must still apply to comments"
+assert not claims.is_extractable("👍👍👍👍👍", "query"), \
+    "emoji are junk whatever the kind"
+print("PASS: one-word queries and page titles survive; one-word comments "
+      "do not")
+
 with db.connect() as conn:
     db.insert_signal(conn, ACC, "meta_ig", "comment", "🔥🔥🔥🔥🔥🔥",
                      external_id="junk-1")

@@ -106,8 +106,19 @@ _EMOJI_OR_PUNCT = re.compile(
 _TAGS_ONLY = re.compile(r"^(?:[@#][\w.\-]+[\s,]*)+$", re.UNICODE)
 
 
-def is_extractable(text):
-    """False for text that provably carries no customer belief."""
+def is_extractable(text, kind=None):
+    """False for text that provably carries no customer belief.
+
+    `kind` matters for one rule. In a comment, a single word is praise —
+    "Kjempebra" is not a claim. In a search query or a page title it is
+    the whole signal: someone typing "passform", or a page called
+    "Størrelsesguide", is unambiguous evidence of a sizing concern, and
+    those are exactly the sources that make an angle cross-source.
+
+    Dropping them would quietly bias the corpus toward comments, which
+    are the source most likely to over-represent one loud argument —
+    the failure the diversity weighting exists to prevent.
+    """
     if not text:
         return False
     text = text.strip()
@@ -117,6 +128,8 @@ def is_extractable(text):
         return False
     if _TAGS_ONLY.match(text):             # "@ola #interiør"
         return False
+    if kind in ("query", "page"):
+        return True
     if len(text.split()) < 2:              # one word is praise, not a claim
         return False
     return True
@@ -147,7 +160,7 @@ def select_signals(conn, account, limit=None):
         (account,),
     ).fetchall()
 
-    rows = [r for r in rows if is_extractable(r["text"])]
+    rows = [r for r in rows if is_extractable(r["text"], r["kind"])]
 
     if not limit or len(rows) <= limit:
         return rows
@@ -216,6 +229,24 @@ def build_batch_payload(batch):
 def extract_claims(conn, account, batch_size=25, limit=None):
     """Extract claims from every signal not yet processed."""
     import db
+
+    # Rows the pre-filter rejects are considered and dismissed for free.
+    # Marking them keeps the "waiting" count honest — otherwise every
+    # emoji sits in the estimate forever, making a finished corpus look
+    # like there is work left in it.
+    skipped = conn.execute(
+        "SELECT id, kind, text FROM signal WHERE account = ? "
+        "AND claimed_at IS NULL AND LENGTH(text) > 8",
+        (account,),
+    ).fetchall()
+    skipped = [r for r in skipped if not is_extractable(r["text"], r["kind"])]
+    if skipped:
+        conn.executemany(
+            "UPDATE signal SET claimed_at = ? WHERE id = ?",
+            [(_now(), r["id"]) for r in skipped],
+        )
+        conn.commit()
+        print(f"  claims: {len(skipped)} signals filtered locally, free")
 
     rows = select_signals(conn, account, limit)
     total = 0
