@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+service-account.json
+*.pem
+*.key
+
+# Real client data — never commit
+data/
+out/
+private/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Tooling scratch
+.playwright-mcp/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,14 @@
+# Core pipeline
+anthropic>=0.69,<2
+requests>=2.32
+
+# Onboarding server
+Flask>=3.0
+
+# Google adapters. Only needed if you pull GSC or GA4; the rest of the
+# pipeline imports them lazily inside sources/google.py, so a run without
+# Google configured does not need them installed.
+google-auth>=2.35
+google-auth-oauthlib>=1.2
+google-api-python-client>=2.140
+google-analytics-data>=0.18

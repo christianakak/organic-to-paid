@@ -1,0 +1,20 @@
+[project]
+name = "angle-engine"
+version = "0.1.0"
+description = "Mines a business's own organic footprint into a ranked bank of advertising angles."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+
+dependencies = [
+    "anthropic>=0.69,<2",
+    "requests>=2.32",
+    "Flask>=3.0",
+    "google-auth>=2.35",
+    "google-auth-oauthlib>=1.2",
+    "google-api-python-client>=2.140",
+    "google-analytics-data>=0.18",
+]
+
+[tool.uv]
+package = false
