@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: uv pip install --system -r requirements.txt
+
+      # Plain asserts, no framework. Each file is runnable on its own and
+      # prints what it proved; `set -e` plus the loop means the first
+      # failure stops the job with that file's own message on screen.
+      - name: Run tests
+        run: |
+          set -e
+          for t in tests/test_*.py; do
+            echo "--- $t"
+            python "$t"
+          done
+
+      # Nothing under data/, out/ or private/ is ever meant to be in the
+      # repo, and .gitignore covering them is not the same as checking.
+      - name: No client data committed
+        run: |
+          if git ls-files | grep -E '^(data|out|private)/|\.env$|service-account\.json|\.db$'; then
+            echo "::error::client data or credentials are tracked"
+            exit 1
+          fi
+          echo "clean"
