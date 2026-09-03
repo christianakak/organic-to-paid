@@ -1,0 +1,76 @@
+/* Caldera — design tokens.
+ *
+ * The single source of truth for the angle bank's appearance.
+ * pipeline/render_html.py reads this file at render time and inlines it,
+ * so there is no second copy to drift. Change a value here and the next
+ * rendered angle bank has it.
+ *
+ * tests/test_brand.py fails if the renderer references a token this file
+ * does not define.
+ *
+ * One substitution from the reference: PP Neue Corp Compact is a licensed
+ * Pangram Pangram face. Anton is the spec's own first substitute and is
+ * freely available, so it leads the display stack. Drop the real face in
+ * and it takes over without any other change.
+ */
+
+:root {
+  /* --- Colour ------------------------------------------------- */
+  --color-ember:         #fc5000;  /* the only aggressive accent */
+  --color-plasma-violet: #524ae9;  /* halftone and one card. never controls */
+  --color-sulfur:        #f5f28e;  /* tags. the only yellow */
+  --color-limestone:     #f7f6f2;  /* card surfaces */
+  --color-pumice:        #e2e2df;  /* page canvas */
+  --color-obsidian:      #070607;  /* text */
+  --color-chalk:         #ffffff;  /* text on dark or ember */
+
+  /* --- Type --------------------------------------------------- */
+  --font-display: 'PP Neue Corp Compact', 'Anton', 'Bebas Neue',
+                  ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-body:    'DM Sans', ui-sans-serif, system-ui, -apple-system,
+                  "Segoe UI", Roboto, sans-serif;
+  --font-meta:    ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --text-caption:      12px;  --leading-caption:      1.2;
+  --text-body-sm:      14px;  --leading-body-sm:      1.2;
+  --text-body:         16px;  --leading-body:         1.55;
+  --text-subheading:   26px;  --leading-subheading:   1.2;
+  --text-heading:      32px;  --leading-heading:      1;
+  --text-heading-lg:   48px;  --leading-heading-lg:   1;
+  --text-heading-2xl:  80px;  --leading-heading-2xl:  1.1;
+  --text-heading-3xl:  96px;  --leading-heading-3xl:  0.95;
+  --text-display:     189px;  --leading-display:      0.94;
+
+  --tracking-heading: 0.02em;  /* positive, deliberately. never negative:
+                                * at display sizes the heavy condensed
+                                * strokes collide without it */
+
+  --weight-regular: 400;
+  --weight-medium:  500;       /* body is always Medium. never Regular */
+
+  /* --- Space -------------------------------------------------- */
+  --spacing-4:  4px;   --spacing-8:  8px;   --spacing-12: 12px;
+  --spacing-16: 16px;  --spacing-20: 20px;  --spacing-24: 24px;
+  --spacing-32: 32px;  --spacing-40: 40px;  --spacing-48: 48px;
+  --spacing-56: 56px;  --spacing-64: 64px;  --spacing-80: 80px;
+
+  /* --- Shape -------------------------------------------------- */
+  --radius-cards:   40px;
+  --radius-pills:  800px;
+  --radius-small:   16px;
+  --radius-inputs: 100px;
+  --radius-medium:  20px;
+  --radius-buttons: 40px;
+
+  /* --- Layout ------------------------------------------------- */
+  --page-max-width: 1280px;
+  --section-gap:      80px;
+  --card-padding:     40px;
+  --element-gap:      16px;
+
+  /* --- Surfaces ----------------------------------------------- */
+  --surface-canvas: var(--color-pumice);
+  --surface-card:   var(--color-limestone);
+  --surface-accent: var(--color-ember);
+  --surface-hero:   var(--color-plasma-violet);
+}
