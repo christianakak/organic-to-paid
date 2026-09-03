@@ -29,6 +29,8 @@ what it proved.
 | `test_scrub.py` | PII and quoted chains removed; text with nothing sensitive comes back byte-identical |
 | `test_claims_selection.py` | A capped run spans sources; junk is filtered free; processed signals never return |
 | `test_estimate.py` | The cost estimate moves with the corpus, and produces it without spending |
+| `test_happyscribe.py` | The three request parameters whose absence fails silently |
+| `test_pipeline_e2e.py` | Signal in, filming brief out, with the model stubbed |
 | `test_brand.py` | The renderer and `brand/tokens.css` have not drifted |
 
 ## Adding a data source
