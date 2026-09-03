@@ -75,54 +75,187 @@ into verbatim.
 extract claims if they reveal a customer belief being responded to.
 - Objections are disproportionately valuable. Do not soften or skip them.
 
+LANGUAGE — this is not optional and not cosmetic:
+- `text` is ALWAYS written in Norwegian bokmål, whatever language the \
+source was in. The same belief expressed in Norwegian and in English must \
+come out as the same Norwegian sentence, or it splits into two angles and \
+the recurrence count that drives the whole ranking is halved.
+- `verbatim` is NEVER translated. It is the customer's exact words in \
+whatever language they used. Translating it destroys the only thing in \
+the output that is unarguably real.
+- `claim_type` stays one of the five English keys above. It is an \
+identifier, not prose.
+
 Return ONLY a JSON array. One object per input item, in order:
 [{"i": 0, "claims": [{"text": "...", "verbatim": "...", "claim_type": "objection"}]}]
 """
 
 
-def extract_claims(conn, account, batch_size=25, limit=None):
-    """Extract claims from every signal that doesn't have any yet."""
-    import db
+# Text that cannot contain a claim, filtered locally before anything is
+# sent. EXTRACT_SYSTEM already tells the model to return zero claims for
+# these, but you pay to ask. On a comment corpus this is a large share of
+# the rows and none of the value.
+#
+# Deliberately timid. "for dyrt" is two words and a complete objection;
+# eating it to save a fraction of a cent would be a bad trade, so the
+# thresholds sit below anything that could carry a belief.
+_EMOJI_OR_PUNCT = re.compile(
+    r"^[\s\W\d_]*$",
+    re.UNICODE,
+)
+_TAGS_ONLY = re.compile(r"^(?:[@#][\w.\-]+[\s,]*)+$", re.UNICODE)
 
+
+def is_extractable(text):
+    """False for text that provably carries no customer belief."""
+    if not text:
+        return False
+    text = text.strip()
+    if len(text) < 6:
+        return False
+    if _EMOJI_OR_PUNCT.match(text):        # emoji, punctuation, bare digits
+        return False
+    if _TAGS_ONLY.match(text):             # "@ola #interiør"
+        return False
+    if len(text.split()) < 2:              # one word is praise, not a claim
+        return False
+    return True
+
+
+def select_signals(conn, account, limit=None):
+    """Signals still needing extraction, sampled across sources when capped.
+
+    The cap exists so a first run can check the output shape without
+    paying for the whole corpus. Taking the first N rows in table order
+    would defeat it: rows arrive in pull order, so a capped run would see
+    one source and nothing else.
+
+    That matters more than it sounds. Source diversity is the highest
+    weighted term in the ranking — a claim appearing in comments *and*
+    search *and* a sales call is the whole thesis — so a single-source
+    sample makes every diversity score identical and the resulting bank
+    is ranked on nothing while looking entirely plausible.
+
+    So: proportional across sources, newest first within each. An account
+    that is 80% comments should get a sample that is mostly comments,
+    but every source present gets at least a few rows.
+    """
     rows = conn.execute(
-        "SELECT s.id, s.kind, s.source, s.text, s.raw FROM signal s "
-        "LEFT JOIN claim c ON c.signal_id = s.id "
-        "WHERE s.account = ? AND c.id IS NULL AND LENGTH(s.text) > 8",
+        "SELECT id, kind, source, text, raw FROM signal "
+        "WHERE account = ? AND claimed_at IS NULL AND LENGTH(text) > 8 "
+        "ORDER BY source, COALESCE(created_at, fetched_at) DESC, id DESC",
         (account,),
     ).fetchall()
 
-    if limit:
-        rows = rows[:limit]
+    rows = [r for r in rows if is_extractable(r["text"])]
 
+    if not limit or len(rows) <= limit:
+        return rows
+
+    by_source = {}
+    for r in rows:
+        by_source.setdefault(r["source"], []).append(r)
+
+    # A floor per source, so nothing is invisible at small caps, then the
+    # rest shared out in proportion to how much of the corpus each source
+    # actually is.
+    sources = sorted(by_source)
+    floor = max(1, min(5, limit // max(1, len(sources))))
+
+    picked, taken = [], {}
+    for src in sources:
+        take = min(floor, len(by_source[src]))
+        picked.extend(by_source[src][:take])
+        taken[src] = take
+
+    remaining = limit - len(picked)
+    pool = sum(len(by_source[s]) - taken[s] for s in sources)
+
+    for src in sources:
+        if remaining <= 0 or pool <= 0:
+            break
+        left = len(by_source[src]) - taken[src]
+        share = min(left, round(remaining * left / pool)) if pool else 0
+        picked.extend(by_source[src][taken[src]:taken[src] + share])
+        taken[src] += share
+
+    # Rounding can leave the sample a row or two short of the cap.
+    if len(picked) < limit:
+        for src in sources:
+            while len(picked) < limit and taken[src] < len(by_source[src]):
+                picked.append(by_source[src][taken[src]])
+                taken[src] += 1
+
+    return picked[:limit]
+
+
+def build_batch_payload(batch):
+    """The user-message content for one extraction batch.
+
+    Split out so `pipeline/estimate.py` can price the exact payload that
+    would be sent rather than an approximation of it.
+    """
+    items = []
+    for j, r in enumerate(batch):
+        speaker = ""
+        if r["raw"]:
+            try:
+                speaker = (json.loads(r["raw"]) or {}).get("speaker", "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        items.append({
+            "i": j,
+            "source": r["source"],
+            "kind": r["kind"],
+            "speaker": speaker,
+            "text": r["text"][:1500],
+        })
+    return json.dumps(items, ensure_ascii=False)
+
+
+def extract_claims(conn, account, batch_size=25, limit=None):
+    """Extract claims from every signal not yet processed."""
+    import db
+
+    rows = select_signals(conn, account, limit)
     total = 0
+    spent_in = spent_out = 0
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
-        items = []
-        for j, r in enumerate(batch):
-            speaker = ""
-            if r["raw"]:
-                try:
-                    speaker = (json.loads(r["raw"]) or {}).get("speaker", "")
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            items.append({
-                "i": j,
-                "source": r["source"],
-                "kind": r["kind"],
-                "speaker": speaker,
-                "text": r["text"][:1500],
-            })
+        try:
+            msg = client().messages.create(
+                model=config.MODEL,
+                max_tokens=4000,
+                system=EXTRACT_SYSTEM,
+                messages=[{
+                    "role": "user",
+                    "content": build_batch_payload(batch),
+                }],
+            )
+        except Exception as e:
+            # One bad batch must not end a run that has already cost
+            # money. These signals stay unmarked, so the next run picks
+            # them up rather than losing them.
+            db.record(conn, account, "claims", "error",
+                      f"batch at offset {i}: {e}")
+            conn.commit()
+            print(f"  claims: batch at {i} FAILED — {e}")
+            continue
 
-        msg = client().messages.create(
-            model=config.MODEL,
-            max_tokens=4000,
-            system=EXTRACT_SYSTEM,
-            messages=[{
-                "role": "user",
-                "content": json.dumps(items, ensure_ascii=False),
-            }],
-        )
-        parsed = _json_from(msg.content[0].text) or []
+        spent_in += msg.usage.input_tokens
+        spent_out += msg.usage.output_tokens
+
+        parsed = _json_from(msg.content[0].text)
+        if parsed is None:
+            # Unparseable is not the same as "no claims here", and
+            # marking these processed would silently discard real signal.
+            # Leave them for the next run.
+            db.record(conn, account, "claims", "dropped",
+                      f"batch at offset {i}: response was not JSON")
+            conn.commit()
+            print(f"  claims: batch at {i} returned unparseable JSON, "
+                  f"left for a later run")
+            continue
 
         for entry in parsed:
             idx = entry.get("i")
@@ -141,11 +274,38 @@ def extract_claims(conn, account, batch_size=25, limit=None):
                      (c.get("verbatim") or "").strip(), ctype),
                 )
                 total += 1
+
+        # The call succeeded and its response parsed, so every signal in
+        # this batch has been considered — including the ones that
+        # correctly produced nothing. Marking them is what stops the next
+        # run paying to reconsider spam.
+        conn.executemany(
+            "UPDATE signal SET claimed_at = ? WHERE id = ?",
+            [(_now(), r["id"]) for r in batch],
+        )
         conn.commit()
-        print(f"  claims: {min(i + batch_size, len(rows))}/{len(rows)} "
-              f"signals -> {total} claims")
+
+        done = min(i + batch_size, len(rows))
+        print(f"  claims: {done}/{len(rows)} signals -> {total} claims "
+              f"({_cost(spent_in, spent_out)} so far)")
 
     return total
+
+
+def _now():
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _cost(tokens_in, tokens_out):
+    """Running spend, so a run costing more than the estimate said is
+    visible while it is still running rather than afterwards."""
+    from pipeline import estimate
+    price = estimate.PRICES.get(config.MODEL)
+    if not price:
+        return f"{tokens_in + tokens_out:,} tokens"
+    usd = (tokens_in / 1e6) * price[0] + (tokens_out / 1e6) * price[1]
+    return f"${usd:,.2f}"
 
 
 CLUSTER_SYSTEM = """You group customer claims into canonical angles.
@@ -160,8 +320,10 @@ Two claims belong together when a single ad could address both. Differences \
 of wording, intensity, or specific product do not separate them. Genuinely \
 different beliefs do.
 
-A canonical claim is written as a short, neutral, customer-voice statement. \
-Not a slogan. Not a summary of a category.
+A canonical claim is written as a short, neutral, customer-voice statement \
+in Norwegian bokmål. Not a slogan. Not a summary of a category. Existing \
+canonicals are already Norwegian; match their register rather than \
+inventing a parallel English vocabulary beside them.
 
 Return ONLY JSON:
 [{"i": 0, "canonical": "exact existing string OR a new one", "claim_type": "objection"}]

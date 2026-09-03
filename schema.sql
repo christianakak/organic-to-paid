@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS signal (
     raw           TEXT,               -- JSON blob of the provider payload
     fetched_at    TEXT    NOT NULL,
 
+    -- When claim extraction last processed this row, whatever it found.
+    --
+    -- Not "has claims". A signal that legitimately yields nothing — an
+    -- emoji, spam, a one-word thank you — has no claim rows, so selecting
+    -- unprocessed work by the absence of claims would re-send exactly
+    -- that material to the API on every future run, forever. This column
+    -- is what makes the paid stage idempotent.
+    --
+    -- Set only when the API call succeeded. A malformed response looks
+    -- identical to "no claims here", and marking those processed would
+    -- silently discard real signal.
+    claimed_at    TEXT,
+
     -- Re-running `pull` must be idempotent. Every adapter counts how many
     -- rows it actually added by checking whether insert_signal returned an
     -- id, and that only works if a repeat insert is silently ignored here.

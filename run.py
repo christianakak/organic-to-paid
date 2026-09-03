@@ -3,8 +3,9 @@
 
     python run.py setup   --account acme    # once per machine
     python run.py connect --account acme    # once per account
-    python run.py doctor  --account acme
-    python run.py pull    --account acme
+    python run.py doctor   --account acme
+    python run.py pull     --account acme
+    python run.py estimate --account acme    # what claims will cost
     python run.py claims  --account acme
     python run.py score   --account acme
     python run.py brief   --account acme --top 5
@@ -123,6 +124,14 @@ def cmd_pull(args):
             print(f"  {source:<12} {kind:<8} {count:>6}")
 
 
+def cmd_estimate(args):
+    """Price a claims run before paying for it. Spends nothing."""
+    from pipeline import estimate
+    db.init()
+    with db.connect() as conn:
+        print(estimate.report(conn, args.account, limit=args.limit))
+
+
 def cmd_claims(args):
     from pipeline import claims
     with db.connect() as conn:
@@ -189,6 +198,7 @@ def main():
 
     for name, fn in (("setup", cmd_setup), ("connect", cmd_connect),
                      ("doctor", cmd_doctor), ("pull", cmd_pull),
+                     ("estimate", cmd_estimate),
                      ("claims", cmd_claims), ("score", cmd_score),
                      ("brief", cmd_brief), ("all", cmd_all)):
         s = sub.add_parser(name)

@@ -133,6 +133,7 @@ silently when it isn't.
 ```bash
 python run.py --account acme doctor          # check creds before spending
 python run.py --account acme pull            # fetch all sources
+python run.py --account acme estimate        # price it first, free
 python run.py --account acme claims          # extract + cluster (costs tokens)
 python run.py --account acme score --top 15  # rank, re-runnable free
 python run.py --account acme brief --top 5   # write filming briefs
@@ -141,6 +142,18 @@ python run.py --account acme brief --top 5   # write filming briefs
 Stages are separate on purpose. Pulling is slow and rate-limited, claim
 extraction costs money, and you'll want to re-run scoring with different
 weights without paying for either again.
+
+`estimate` counts the actual batches that would be sent, prices them at
+each model, and spends nothing doing it. Extraction is also idempotent:
+every processed signal is marked, including the ones that correctly
+yielded no claims, so re-running after a fresh pull only pays for what
+arrived since.
+
+`--limit` samples proportionally across sources rather than taking the
+first N rows. That matters more than it sounds — source diversity is the
+highest-weighted term in the ranking, so a sample drawn from one source
+gives every angle an identical diversity score and produces a bank that
+looks fine and is ranked on nothing.
 
 First run on yourself:
 

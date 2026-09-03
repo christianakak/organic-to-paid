@@ -34,6 +34,11 @@ line. That is the whole point of the format.
 - `testing` states what belief this ad is trying to change, so the \
 result is interpretable.
 
+LANGUAGE: write everything in Norwegian bokmål. Someone is going to \
+stand in a room and say the hook and the script out loud to a phone \
+camera, and they are Norwegian. Quotes you cite inside `rationale` stay \
+in the words the customer actually used.
+
 Return ONLY JSON:
 {"hook": "...", "script": "...", "scene": "...", "talent": "...",
  "props": "...", "rationale": "...", "testing": "..."}

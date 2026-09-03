@@ -43,6 +43,7 @@ python run.py --account bty setup            # once per machine
 python run.py --account bty connect          # once per account
 python run.py --account bty doctor           # before every pull
 python run.py --account self pull
+python run.py --account self estimate        # what claims will cost
 python run.py --account self claims --limit 200
 python run.py --account self score --top 20
 python run.py --account self brief --top 5
@@ -152,6 +153,27 @@ about which threads are customer conversations and is explicable to
 anyone who asks what was ingested. `pipeline/scrub.py` strips names,
 addresses, phone numbers, signature blocks and quoted chains on the way
 in, so the raw body is never written down.
+
+**12. A capped `claims` run samples across sources, never down the
+table.** `--limit` exists so a first run can check output shape cheaply.
+Taking the first N rows would defeat it: rows arrive in pull order, so
+the sample would be one source. Since source diversity is the
+highest-weighted scoring term, every claim would then share a source,
+every diversity score would be identical, and the bank would be ranked on
+nothing while looking entirely plausible. Do not "simplify" the sampler.
+
+**13. `signal.claimed_at` means processed, not "has claims".** A signal
+that legitimately yields nothing has no claim rows, so selecting work by
+the absence of claims re-sends exactly that material on every future run.
+The marker is set only when the API call succeeded *and* its response
+parsed — an unparseable response looks identical to "nothing here", and
+marking those would silently discard real signal.
+
+**14. Canonical claims and briefs are Norwegian; verbatims never are.**
+The same objection in two languages would otherwise cluster as two
+angles, halving the recurrence count the ranking rests on. The verbatim
+is the one thing in the output that is unarguably real — translating it
+is the only way to make it not so.
 
 **11. Quoted reply chains are stripped for a scoring reason, not only a
 privacy one.** A five-message thread quotes itself, so the same sentence

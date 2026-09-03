@@ -27,6 +27,8 @@ what it proved.
 | `test_doctor.py` | The credential shape checks, in both directions |
 | `test_connect.py` | A bad key is rejected *and not stored*; settings merge; a domain resolves to a business unit |
 | `test_scrub.py` | PII and quoted chains removed; text with nothing sensitive comes back byte-identical |
+| `test_claims_selection.py` | A capped run spans sources; junk is filtered free; processed signals never return |
+| `test_estimate.py` | The cost estimate moves with the corpus, and produces it without spending |
 | `test_brand.py` | The renderer and `brand/tokens.css` have not drifted |
 
 ## Adding a data source
@@ -69,6 +71,13 @@ counting it would visibly change the result.
 
 So when you add a check, break the thing it guards and watch it fail
 before you commit. If it doesn't fail, you have written a comment.
+
+This keeps paying. The pre-filter in `pipeline/claims.py` has a rule
+dropping single-word text — "Kjempebra" is praise, not a claim. Its test
+listed six junk cases and passed. Deleting the rule entirely still passed,
+because every one of those cases was already caught by a different rule;
+none of them was a *long* single word. The rule had no coverage at all
+and looked fully covered. Sabotage found it in one run.
 
 ## Derived things
 
