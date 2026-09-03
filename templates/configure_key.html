@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.label }} — one more thing{% endblock %}
+
+{#
+  Second half of the api_key flow: the choice the key alone can't make.
+
+  Two shapes. A picker, when the API can list the options (HappyScribe
+  folders). A resolver, when it can't — Trustpilot's business unit id is
+  a 24-character hex string their own UI never shows you, so the field
+  asks for a domain and the id is looked up. Asking for the id directly
+  is the difference between a paste and a support ticket.
+#}
+
+{% block content %}
+<h1>{{ spec.needs[0].prompt }}</h1>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post">
+
+  {% if options is not none %}
+    <div class="ledger">
+      {% for o in options %}
+      <label class="row" style="cursor:pointer">
+        <div class="row-side">
+          <input type="radio" name="folder_id" value="{{ o.id }}"
+                 {% if loop.first %}checked{% endif %}>
+        </div>
+        <div class="row-main"><div class="row-name">{{ o.name }}</div></div>
+      </label>
+      {% else %}
+      <div class="row">
+        <div class="row-main">
+          <div class="row-note">
+            No folders came back. Everything not in a folder will be read
+            instead.
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      <label class="row" style="cursor:pointer">
+        <div class="row-side">
+          <input type="radio" name="folder_id" value="">
+        </div>
+        <div class="row-main">
+          <div class="row-note">Everything, no folder filter</div>
+        </div>
+      </label>
+    </div>
+  {% else %}
+    <input class="copyfield" name="domain" autofocus
+           placeholder="btygruppen.no">
+    <p class="row-note" style="margin-top:8px">
+      Just the domain. The rest is looked up.
+    </p>
+  {% endif %}
+
+  <p style="margin-top:28px">
+    <button class="btn" type="submit">Continue</button>
+    <a class="delegate" href="/">Skip this</a>
+  </p>
+</form>
+{% endblock %}

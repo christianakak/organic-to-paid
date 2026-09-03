@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Which Gmail label?{% endblock %}
+
+{#
+  Only labels a person made are offered — INBOX, SENT and the rest are
+  filtered out in sources/gmail.py. Asking for a label rather than a
+  search query is deliberate: a label is a decision someone made about
+  which threads are customer conversations, and it is explicable to
+  anyone who later asks what was ingested. A query is neither.
+#}
+
+{% block content %}
+<h1>Which label?</h1>
+<p class="lede">
+  Only this label is read — never the whole mailbox. Names, email
+  addresses, phone numbers, signatures and quoted reply chains are
+  removed before anything is saved.
+</p>
+
+<form method="post">
+  <div class="ledger">
+    {% for lb in labels %}
+    <label class="row" style="cursor:pointer">
+      <div class="row-side">
+        <input type="radio" name="label_id" value="{{ lb.id }}"
+               onclick="document.getElementById('ln').value = this.dataset.name"
+               data-name="{{ lb.name }}"
+               {% if loop.first %}checked{% endif %}>
+      </div>
+      <div class="row-main"><div class="row-name">{{ lb.name }}</div></div>
+    </label>
+    {% else %}
+    <div class="row">
+      <div class="row-main">
+        <div class="row-note">
+          No labels of your own yet. Make one in Gmail — tag a handful of
+          customer threads with it — then come back.
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <input type="hidden" name="label_name" id="ln"
+         value="{{ labels[0].name if labels else '' }}">
+
+  {% if labels %}
+  <p style="margin-top:28px">
+    <button class="btn" type="submit">Read this label</button>
+  </p>
+  {% endif %}
+  <p><a class="delegate" href="/">Skip this</a></p>
+</form>
+{% endblock %}

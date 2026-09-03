@@ -134,6 +134,18 @@ GSC_SITE_URL = os.getenv("GSC_SITE_URL", "")
 # The numeric property ID from GA4 Admin, not the G-XXXX measurement ID.
 GA4_PROPERTY_ID = os.getenv("GA4_PROPERTY_ID", "")
 
+# The Workspace user the service account impersonates. With domain-wide
+# delegation authorised once in Admin console, the service account
+# inherits this person's own Search Console, Analytics and Gmail access —
+# which is why self-runs need no per-property grants at all.
+#
+# This is also what makes Gmail viable. An OAuth app in Testing status
+# issues refresh tokens that expire after seven days, and Gmail's scope
+# is restricted enough that leaving Testing requires a third-party
+# security audit. A delegated service account has neither problem.
+GOOGLE_IMPERSONATE = os.getenv("GOOGLE_IMPERSONATE", "")
+GMAIL_USER = os.getenv("GMAIL_USER", GOOGLE_IMPERSONATE)
+
 
 # ------------------------------------------------------------------
 # First-party

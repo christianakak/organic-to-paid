@@ -197,6 +197,14 @@ CREATE TABLE IF NOT EXISTS connection (
     connected_at     TEXT,
     last_sync_at     TEXT,
     last_error       TEXT,
+
+    -- Per-source choices as JSON: the Gmail label, the HappyScribe
+    -- folder, the Trustpilot business unit. The four dedicated columns
+    -- above predate this and still work, but adding a column per source
+    -- forever does not scale — a seventh source should be a descriptor
+    -- in providers.py and an adapter, not a migration.
+    settings         TEXT,
+
     UNIQUE (account, provider)
 );
 

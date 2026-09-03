@@ -33,6 +33,7 @@ from flask import (Flask, redirect, render_template, request,
 import auth
 import config
 import db
+import providers
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -61,6 +62,21 @@ def _status(account):
                   if k.startswith(("gsc", "ga4")) and k.endswith("query"))
     transcripts = counts.get("transcript:comment", 0)
     reviews = counts.get("trustpilot:comment", 0)
+    emails = counts.get("gmail:comment", 0)
+
+    with db.connect() as conn:
+        gmail_set = auth.get_settings(conn, account, "gmail")
+        hs_set = auth.get_settings(conn, account, "happyscribe")
+        tp_set = auth.get_settings(conn, account, "trustpilot")
+        # What the last pull actually dropped. A silent failure becomes
+        # visible at the one moment someone is still looking at the
+        # screen and can do something about it.
+        drops = conn.execute(
+            "SELECT source, detail FROM pull_log "
+            "WHERE account = ? AND event IN ('dropped', 'error') "
+            "ORDER BY id DESC LIMIT 5",
+            (account,),
+        ).fetchall()
 
     return {
         "meta": {
@@ -78,9 +94,28 @@ def _status(account):
             "error": google["last_error"] if google else None,
             "queries": queries,
         },
+        "gmail": {
+            "connected": bool(gmail_set.get("label_id")),
+            "label": gmail_set.get("label_name") or "",
+            "messages": emails,
+        },
+        "happyscribe": {
+            "connected": bool(hs_set.get("api_key")),
+            "configured": bool(hs_set.get("folder_id")),
+            "turns": transcripts,
+        },
+        "trustpilot": {
+            "connected": bool(tp_set.get("api_key")),
+            "configured": bool(tp_set.get("business_unit_id")),
+            "name": tp_set.get("display_name") or "",
+            "reviews": reviews,
+        },
         "transcripts": transcripts,
         "reviews": reviews,
-        "total": posts + comments + queries + transcripts + reviews,
+        "dropped": [{"source": d["source"], "detail": d["detail"]}
+                    for d in drops],
+        "total": (posts + comments + queries + transcripts + reviews
+                  + emails),
         "syncing": _sync_state.get(account, {}).get("running", False),
     }
 
@@ -230,6 +265,141 @@ def pick_google():
 
 
 # ------------------------------------------------------------------
+# Gmail — one label, never the whole mailbox
+# ------------------------------------------------------------------
+#
+# No OAuth button here. Gmail runs on the same delegated service account
+# as Search Console and Analytics, so there is nothing to authorise at
+# this point — only a label to choose. The bound is the product: a
+# deliberate label selection is explicable to anyone who asks what was
+# ingested, and a whole-mailbox sweep is not.
+
+@app.route("/connect/gmail", methods=["GET", "POST"])
+def pick_gmail():
+    account = session.get("account", ACCOUNT)
+    from sources import gmail
+
+    with db.connect() as conn:
+        if request.method == "POST":
+            label_id = request.form.get("label_id") or None
+            label_name = request.form.get("label_name") or ""
+            if label_id:
+                auth.update_settings(conn, account, "gmail",
+                                     label_id=label_id,
+                                     label_name=label_name)
+                _start_sync(account)
+            return redirect(url_for("index"))
+
+        try:
+            labels = gmail.list_labels(conn, account)
+        except Exception as e:
+            return render_template(
+                "error.html",
+                message=f"Couldn't read your Gmail labels. Usually this "
+                        f"means domain-wide delegation hasn't been "
+                        f"authorised yet — run setup again. ({e})"), 400
+
+    return render_template("pick_gmail.html", labels=labels, account=account)
+
+
+# ------------------------------------------------------------------
+# API-key sources — driven entirely from providers.py
+# ------------------------------------------------------------------
+#
+# One route for every source whose connect flow is "paste a key, then
+# pick something". Adding a seventh source of this shape needs a
+# descriptor and an adapter, and nothing here.
+
+@app.route("/connect/<provider>/key", methods=["GET", "POST"])
+def connect_key(provider):
+    spec = providers.BY_KEY.get(provider)
+    if not spec or spec["auth"] != "api_key":
+        return render_template("error.html",
+                               message="Unknown source."), 404
+
+    account = session.get("account", ACCOUNT)
+
+    if request.method == "POST":
+        key = (request.form.get("api_key") or "").strip()
+        good, message = _verify_key(provider, key)
+        if not good:
+            return render_template("connect_key.html", spec=spec,
+                                   account=account, error=message), 400
+        with db.connect() as conn:
+            auth.save_connection(conn, account, provider,
+                                 access_token=key, last_error=None)
+            auth.update_settings(conn, account, provider, api_key=key)
+        return redirect(url_for("configure_key", provider=provider))
+
+    return render_template("connect_key.html", spec=spec, account=account,
+                           error=None)
+
+
+def _verify_key(provider, key):
+    """Prove the key works before storing it. One call, cheapest endpoint."""
+    if not key:
+        return False, "Nothing pasted."
+    try:
+        if provider == "happyscribe":
+            from sources import happyscribe
+            happyscribe.verify(key)
+            return True, "ok"
+        if provider == "trustpilot":
+            # Trustpilot has no cheap whoami; the domain lookup on the
+            # next screen is what proves the key. Accept it here and let
+            # that step reject it with a message that names the domain.
+            return True, "ok"
+    except Exception as e:
+        return False, f"That key was rejected: {e}"
+    return True, "ok"
+
+
+@app.route("/connect/<provider>/configure", methods=["GET", "POST"])
+def configure_key(provider):
+    spec = providers.BY_KEY.get(provider)
+    if not spec:
+        return render_template("error.html", message="Unknown source."), 404
+
+    account = session.get("account", ACCOUNT)
+
+    with db.connect() as conn:
+        settings = auth.get_settings(conn, account, provider)
+        key = settings.get("api_key")
+
+        if request.method == "POST":
+            if provider == "trustpilot":
+                from sources.firstparty import resolve_business_unit
+                domain = request.form.get("domain", "")
+                unit_id, label = resolve_business_unit(key, domain)
+                if not unit_id:
+                    return render_template(
+                        "configure_key.html", spec=spec, account=account,
+                        options=None, error=label), 400
+                auth.update_settings(conn, account, provider,
+                                     domain=domain,
+                                     business_unit_id=unit_id,
+                                     display_name=label)
+            else:
+                auth.update_settings(
+                    conn, account, provider,
+                    folder_id=request.form.get("folder_id") or None,
+                )
+            _start_sync(account)
+            return redirect(url_for("index"))
+
+        options = None
+        if provider == "happyscribe":
+            from sources import happyscribe
+            try:
+                options = happyscribe.list_folders(conn, account)
+            except Exception:
+                options = []
+
+    return render_template("configure_key.html", spec=spec, account=account,
+                           options=options, error=None)
+
+
+# ------------------------------------------------------------------
 # Delegation
 # ------------------------------------------------------------------
 
@@ -271,9 +441,10 @@ def _start_sync(account):
 
     def work():
         try:
-            from sources import meta, google, firstparty
+            from sources import (meta, google, firstparty, gmail,
+                                 happyscribe)
             with db.connect() as conn:
-                for mod in (meta, google, firstparty):
+                for mod in (meta, google, gmail, happyscribe, firstparty):
                     try:
                         mod.pull(conn, account)
                     except Exception as e:

@@ -20,6 +20,7 @@ import requests
 
 import config
 import db
+from pipeline import scrub
 
 BASE = "https://graph.facebook.com"
 
@@ -246,14 +247,20 @@ def _pull_comments(conn, account, source, post_id, token):
 
     n = 0
     for c in comments:
-        text = c.get("message") or c.get("text") or ""
+        # Commenters are members of the public who did not sign up to be
+        # in an ad research corpus. Scrubbed on the way in, and the raw
+        # payload (which carries the commenter's name and profile id) is
+        # not kept — storing it would undo the scrubbing.
+        text = scrub.scrub(c.get("message") or c.get("text") or "")
+        if not text:
+            continue
         sid = db.insert_signal(
             conn, account, source, "comment", text,
             external_id=c["id"],
             parent_id=post_id,
             created_at=c.get("created_time") or c.get("timestamp"),
             reactions=c.get("like_count"),
-            raw=c,
+            raw={"post_id": post_id},
         )
         if sid:
             n += 1

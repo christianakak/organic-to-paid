@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Angle Engine CLI.
 
+    python run.py setup   --account acme    # once per machine
+    python run.py connect --account acme    # once per account
     python run.py doctor  --account acme
     python run.py pull    --account acme
     python run.py claims  --account acme
@@ -19,6 +21,66 @@ import sys
 
 import config
 import db
+
+
+def cmd_setup(args):
+    """One-time provider registration. Verifies rather than trusts."""
+    import setup_wizard
+    sys.exit(setup_wizard.run(args.account))
+
+
+def cmd_connect(args):
+    """Start the onboarding server, open a browser, report what lands.
+
+    Deliberately not a second OAuth implementation. A browser is
+    unavoidable — you have to click Allow on Facebook's own page — so
+    the only question was where you land afterwards, and onboard.py
+    already has the pickers, the delegation links, the running tally and
+    the step ordering that puts a real number on screen before the
+    second ask.
+    """
+    import subprocess
+    import threading
+    import time
+
+    import onboard
+
+    db.init()
+    onboard.ACCOUNT = args.account
+    url = f"http://127.0.0.1:{args.port}"
+
+    print(f"\n  Connect sources for '{args.account}'")
+    print(f"  {url}\n")
+    print("  Leave this running. Counts appear here as data lands.")
+    print("  Ctrl-C when you're done.\n")
+
+    threading.Thread(
+        target=lambda: onboard.app.run(host="127.0.0.1", port=args.port,
+                                       debug=False, use_reloader=False),
+        daemon=True,
+    ).start()
+    time.sleep(1.0)
+    subprocess.run(["open", url], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Poll the same counts the page shows, and print only what changed.
+    # A wall of identical lines would bury the one line that matters.
+    seen = {}
+    try:
+        while True:
+            with db.connect() as conn:
+                current = {f"{s}:{k}": n
+                           for s, k, n in db.counts(conn, args.account)}
+            for key, n in sorted(current.items()):
+                if seen.get(key) != n:
+                    print(f"  {key:<24} {n:>6}")
+                    seen[key] = n
+            time.sleep(3)
+    except KeyboardInterrupt:
+        total = sum(seen.values())
+        print(f"\n\n  {total} signals for '{args.account}'.")
+        print(f"  Next: python run.py --account {args.account} "
+              f"claims --limit 200\n")
 
 
 def cmd_doctor(args):
@@ -42,11 +104,12 @@ def cmd_doctor(args):
 
 
 def cmd_pull(args):
-    from sources import meta, google, firstparty
+    from sources import meta, google, firstparty, gmail, happyscribe
     db.init()
     with db.connect() as conn:
         n = 0
         for name, mod in (("meta", meta), ("google", google),
+                          ("gmail", gmail), ("happyscribe", happyscribe),
                           ("first-party", firstparty)):
             try:
                 got = mod.pull(conn, args.account)
@@ -124,11 +187,13 @@ def main():
     p.add_argument("--account", required=True, help="client slug")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    for name, fn in (("doctor", cmd_doctor), ("pull", cmd_pull),
+    for name, fn in (("setup", cmd_setup), ("connect", cmd_connect),
+                     ("doctor", cmd_doctor), ("pull", cmd_pull),
                      ("claims", cmd_claims), ("score", cmd_score),
                      ("brief", cmd_brief), ("all", cmd_all)):
         s = sub.add_parser(name)
         s.set_defaults(fn=fn)
+        s.add_argument("--port", type=int, default=5000)
         s.add_argument("--top", type=int, default=10)
         s.add_argument("--limit", type=int, default=None,
                        help="cap signals processed (for cheap test runs)")

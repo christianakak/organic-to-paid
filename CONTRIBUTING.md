@@ -25,7 +25,25 @@ what it proved.
 | `test_scoring.py` | Cross-source objections rank first; save and share stay separate; boosted engagement stays out |
 | `test_onboard.py` | Empty state, tally, delegation invites, single-use enforcement, CSRF state mismatch |
 | `test_doctor.py` | The credential shape checks, in both directions |
+| `test_connect.py` | A bad key is rejected *and not stored*; settings merge; a domain resolves to a business unit |
+| `test_scrub.py` | PII and quoted chains removed; text with nothing sensitive comes back byte-identical |
 | `test_brand.py` | The renderer and `brand/tokens.css` have not drifted |
+
+## Adding a data source
+
+If it connects with an API key and then needs one thing picked, it is a
+descriptor in `providers.py` and an adapter in `sources/`. The route, the
+form, the picker and the ledger row are already generic. Do not add a
+column to `connection` — per-source choices go in its `settings` JSON.
+
+If it needs a real OAuth flow with provider-specific pickers, it will
+look like `meta` or `google`: listed in `providers.py` for ordering and
+labelling, with its flow in `auth.py` and `onboard.py`. That split is
+deliberate — pretending those two are the same shape as "paste a key"
+would make the registry lie.
+
+Anything conversational goes through `pipeline.scrub` at insert, and its
+`raw` column must not carry the payload the scrubbing just removed.
 
 ## The rule about checks
 

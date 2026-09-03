@@ -11,6 +11,7 @@ OAuth is one button and a picker. Service accounts remain fine for
 running the tool on your own properties; see config.py.
 """
 
+import json
 import os
 import secrets
 import time
@@ -55,7 +56,7 @@ def save_connection(conn, account, provider, **kw):
     fields = {
         "access_token", "refresh_token", "expires_at", "scopes",
         "meta_page_id", "meta_ig_user_id", "gsc_site_url",
-        "ga4_property_id", "last_sync_at", "last_error",
+        "ga4_property_id", "last_sync_at", "last_error", "settings",
     }
     data = {k: v for k, v in kw.items() if k in fields}
 
@@ -85,6 +86,32 @@ def get_connection(conn, account, provider):
         "SELECT * FROM connection WHERE account = ? AND provider = ?",
         (account, provider),
     ).fetchone()
+
+
+def get_settings(conn, account, provider):
+    """Per-source choices as a dict. Always a dict, never None.
+
+    A source that has been connected but not yet configured, and one that
+    has never been touched, both return {} — callers care whether the
+    key they want is present, not which flavour of absent this is.
+    """
+    row = get_connection(conn, account, provider)
+    if not row:
+        return {}
+    try:
+        return json.loads(row["settings"] or "{}")
+    except (json.JSONDecodeError, TypeError, IndexError):
+        return {}
+
+
+def update_settings(conn, account, provider, **kw):
+    """Merge keys into the settings blob. Merge, not replace — the Gmail
+    label and the sync cursor are written by different code paths."""
+    current = get_settings(conn, account, provider)
+    current.update({k: v for k, v in kw.items() if v is not None})
+    save_connection(conn, account, provider,
+                    settings=json.dumps(current, ensure_ascii=False))
+    return current
 
 
 # ------------------------------------------------------------------

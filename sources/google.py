@@ -41,9 +41,19 @@ def _oauth(conn, account):
 
 def _service_creds():
     from google.oauth2 import service_account
-    return service_account.Credentials.from_service_account_file(
+    creds = service_account.Credentials.from_service_account_file(
         config.GOOGLE_CREDENTIALS, scopes=_SCOPES
     )
+    # Domain-wide delegation. Impersonating a Workspace user makes the
+    # service account inherit that person's own Search Console and
+    # Analytics access, which deletes the step where someone adds an
+    # email by hand inside two consoles and gets no feedback when they
+    # get it wrong. Without a subject the credentials still work, but
+    # only for properties explicitly shared with the service account's
+    # own address — the old, painful route.
+    if config.GOOGLE_IMPERSONATE:
+        creds = creds.with_subject(config.GOOGLE_IMPERSONATE)
+    return creds
 
 
 def _bearer(token):

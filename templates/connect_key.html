@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Connect {{ spec.label }}{% endblock %}
+
+{#
+  One template for every api_key source. What differs between them —
+  label, where to find the key, why it is worth connecting — comes from
+  the descriptor in providers.py, so a seventh source of this shape
+  needs no template work at all.
+#}
+
+{% block content %}
+<h1>Connect {{ spec.label }}</h1>
+<p class="lede">{{ spec.why }}</p>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post">
+  <p class="row-note">{{ spec.credential.prompt }}</p>
+  <input class="copyfield mono" type="password" name="api_key"
+         autocomplete="off" autofocus>
+  <p class="row-note" style="margin-top:8px">
+    Find it at {{ spec.credential.where }}.
+  </p>
+
+  <p style="margin-top:28px">
+    <button class="btn" type="submit">Connect</button>
+    <a class="delegate" href="/">Skip this</a>
+  </p>
+</form>
+{% endblock %}

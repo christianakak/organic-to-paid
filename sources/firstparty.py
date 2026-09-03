@@ -25,6 +25,7 @@ import requests
 
 import config
 import db
+from pipeline import scrub
 
 
 # ------------------------------------------------------------------
@@ -46,7 +47,10 @@ def pull_transcripts(conn, account, directory=None):
     for path in sorted(Path(directory).iterdir()):
         if path.suffix.lower() not in (".txt", ".vtt", ".srt", ".json"):
             continue
-        for i, (speaker, text) in enumerate(_parse_transcript(path)):
+        for i, (speaker, raw_text) in enumerate(_parse_transcript(path)):
+            text = scrub.scrub(raw_text)
+            if not text:
+                continue
             # Rep turns are pitch, not signal. Customer turns are gold.
             # Heuristic: keep everything, tag speaker in external_id so
             # the claim pass can weigh it.
@@ -62,10 +66,22 @@ def pull_transcripts(conn, account, directory=None):
 
 
 def _parse_transcript(path):
-    """Yield (speaker, text) turns. Tolerant of messy formats."""
-    raw = path.read_text(errors="ignore")
+    """Yield (speaker, text) turns from a file on disk."""
+    return _parse_transcript_text(
+        path.read_text(errors="ignore"), path.suffix.lower()
+    )
 
-    if path.suffix.lower() == ".json":
+
+def _parse_transcript_text(raw, suffix=".txt"):
+    """Yield (speaker, text) turns. Tolerant of messy formats.
+
+    Split out from the file version so the HappyScribe adapter can parse
+    an export it fetched over HTTP without writing it to disk first. The
+    speaker split is the load-bearing part: without it the rep's pitch
+    and the customer's objection collapse into one voice and every claim
+    gets attributed to nobody in particular.
+    """
+    if suffix == ".json":
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -161,6 +177,40 @@ def _num(v):
 # Reviews — Trustpilot
 # ------------------------------------------------------------------
 
+def resolve_business_unit(api_key, domain):
+    """Domain -> Trustpilot business unit id.
+
+    The id is a 24-character hex string nobody has memorised and which
+    their UI does not show you. Asking for a domain and looking it up is
+    the difference between a one-line paste and a support ticket.
+    """
+    domain = (domain or "").strip().lower()
+    for prefix in ("https://", "http://", "www."):
+        if domain.startswith(prefix):
+            domain = domain[len(prefix):]
+    domain = domain.split("/")[0]
+    if not domain:
+        return None, "no domain given"
+
+    r = requests.get(
+        "https://api.trustpilot.com/v1/business-units/find",
+        params={"apikey": api_key, "name": domain},
+        timeout=30,
+    )
+    if r.status_code == 401:
+        return None, "API key rejected"
+    if r.status_code == 404:
+        return None, f"no Trustpilot profile found for {domain}"
+    if r.status_code != 200:
+        return None, f"Trustpilot {r.status_code}: {r.text[:200]}"
+
+    data = r.json()
+    unit_id = data.get("id")
+    if not unit_id:
+        return None, f"no business unit in the response for {domain}"
+    return unit_id, data.get("displayName") or domain
+
+
 def pull_trustpilot(conn, account):
     """Trustpilot public Business Units API.
 
@@ -169,9 +219,17 @@ def pull_trustpilot(conn, account):
     generally forbid scraping in their terms, and reviews can contain
     personal data under GDPR.
     """
-    key = os.getenv("TRUSTPILOT_API_KEY", "")
-    unit = os.getenv("TRUSTPILOT_BUSINESS_UNIT_ID", "")
+    import auth
+
+    # Stored credentials win; env is the fallback for self-runs that
+    # never went through the connect flow.
+    settings = auth.get_settings(conn, account, "trustpilot")
+    key = settings.get("api_key") or os.getenv("TRUSTPILOT_API_KEY", "")
+    unit = (settings.get("business_unit_id")
+            or os.getenv("TRUSTPILOT_BUSINESS_UNIT_ID", ""))
     if not (key and unit):
+        db.record(conn, account, "trustpilot", "skipped",
+                  "no API key or no business unit resolved")
         return 0
 
     n, page = 0, 1
@@ -187,15 +245,20 @@ def pull_trustpilot(conn, account):
         if not reviews:
             break
         for rev in reviews:
-            text = " ".join(
+            text = scrub.scrub(" ".join(
                 filter(None, [rev.get("title"), rev.get("text")])
-            )
+            ))
+            if not text:
+                continue
             sid = db.insert_signal(
                 conn, account, "trustpilot", "comment", text,
                 external_id=f"tp:{rev.get('id')}",
                 created_at=rev.get("createdAt"),
                 reactions=rev.get("stars"),
-                raw=rev,
+                # The full review payload carries the reviewer's display
+                # name and country. Keeping only the stars means the
+                # scrubbing above is not undone by the raw column.
+                raw={"stars": rev.get("stars")},
             )
             if sid:
                 n += 1

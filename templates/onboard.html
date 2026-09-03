@@ -96,26 +96,103 @@
     <a class="delegate" href="/delegate/google">Someone else manages this →</a>
   {% endif %}
 
-  {# ---- Step 3: files. Optional, no OAuth. -------------------- #}
-  <div class="row{% if status.transcripts or status.reviews %} is-done{% endif %}">
+  {# ---- Step 3: Gmail. Optional. ------------------------------
+     No connect button: Gmail runs on the same delegated service account
+     as Search Console, so there is nothing to authorise here — only a
+     label to choose. The label is the bound, and the bound is the point. #}
+  <div class="row{% if status.gmail.connected %} is-done{% endif %}">
     <div class="row-main">
       <div class="row-name">
-        Call recordings &amp; reviews
+        Gmail
         <span class="tag-optional">optional</span>
       </div>
-      <div class="row-note">
-        {% if status.transcripts or status.reviews %}
-          {{ status.transcripts }} transcript turns,
-          {{ status.reviews }} reviews.
-        {% else %}
-          Sales calls are the single richest source here — objections said
-          out loud. Send them over and they get added.
-        {% endif %}
+      {% if status.gmail.connected %}
+        <div class="row-note">
+          {{ status.gmail.messages }} messages from
+          &ldquo;{{ status.gmail.label }}&rdquo;. Names, addresses,
+          signatures and quoted replies are stripped before anything is
+          stored.
+        </div>
+      {% else %}
+        <div class="row-note">
+          Customers writing to you directly. One label you pick — never
+          the whole mailbox — anonymised on the way in.
+        </div>
+      {% endif %}
+    </div>
+    <div class="row-side">
+      <a class="btn btn-quiet" href="/connect/gmail">
+        {% if status.gmail.connected %}Change label{% else %}Pick a label{% endif %}
+      </a>
+    </div>
+  </div>
+
+  {# ---- Step 4: transcripts. Optional. ------------------------ #}
+  <div class="row{% if status.happyscribe.configured %} is-done{% endif %}">
+    <div class="row-main">
+      <div class="row-name">
+        Call transcripts
+        <span class="tag-optional">optional</span>
       </div>
+      {% if status.happyscribe.configured %}
+        <div class="row-note">{{ status.happyscribe.turns }} speaker turns.</div>
+      {% else %}
+        <div class="row-note">
+          The richest source here — objections said out loud, with the
+          answer next to them. Connect HappyScribe and pick a folder.
+        </div>
+      {% endif %}
+    </div>
+    <div class="row-side">
+      {% if status.happyscribe.connected and not status.happyscribe.configured %}
+        <a class="btn btn-quiet" href="/connect/happyscribe/configure">Pick a folder</a>
+      {% elif not status.happyscribe.connected %}
+        <a class="btn btn-quiet" href="/connect/happyscribe/key">Connect</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Step 5: reviews. Optional. ---------------------------- #}
+  <div class="row{% if status.trustpilot.configured %} is-done{% endif %}">
+    <div class="row-main">
+      <div class="row-name">
+        Reviews
+        <span class="tag-optional">optional</span>
+      </div>
+      {% if status.trustpilot.configured %}
+        <div class="row-note">
+          {{ status.trustpilot.reviews }} reviews from
+          {{ status.trustpilot.name }}.
+        </div>
+      {% else %}
+        <div class="row-note">
+          People with a reason to be specific, which makes them unusually
+          quotable. Paste your domain, not an ID.
+        </div>
+      {% endif %}
+    </div>
+    <div class="row-side">
+      {% if status.trustpilot.connected and not status.trustpilot.configured %}
+        <a class="btn btn-quiet" href="/connect/trustpilot/configure">Add domain</a>
+      {% elif not status.trustpilot.connected %}
+        <a class="btn btn-quiet" href="/connect/trustpilot/key">Connect</a>
+      {% endif %}
     </div>
   </div>
 
 </div>
+
+{# What the last sync could not do. Shown here rather than buried in a
+   log, because this is the one moment someone is looking at the screen
+   and still able to fix it. #}
+{% if status.dropped %}
+<div style="margin-top:32px">
+  <div class="row-note">Worth knowing</div>
+  {% for d in status.dropped %}
+    <div class="error">{{ d.source }} — {{ d.detail }}</div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <p class="foot">
   Read-only access. Revoke any time from Facebook or Google settings.

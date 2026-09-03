@@ -38,9 +38,10 @@ where.
 
 ```bash
 uv venv --python 3.12 && uv pip install -r requirements.txt
-cp env.example .env             # fill in
 
-python run.py --account self doctor          # ALWAYS first
+python run.py --account bty setup            # once per machine
+python run.py --account bty connect          # once per account
+python run.py --account bty doctor           # before every pull
 python run.py --account self pull
 python run.py --account self claims --limit 200
 python run.py --account self score --top 20
@@ -66,9 +67,11 @@ that isn't a constraint for you.
 ## Architecture
 
 ```
-run.py           CLI: doctor → pull → claims → score → brief
+run.py           CLI: setup → connect → doctor → pull → claims → score → brief
+setup_wizard.py  one-time provider registration, every step verified
 doctor.py        pre-flight credential probes
 onboard.py       Flask onboarding server
+providers.py     one descriptor per source — add a source here, not in five files
 auth.py          OAuth flows, per-account credential store
 config.py        env loading (./.env, then $ANGLE_ENV_FILE, then real env)
 db.py            sqlite helpers
@@ -79,7 +82,12 @@ sources/
   google.py      GSC queries, GA4 pages + site-search terms
   firstparty.py  call transcripts, email subject CSV, Trustpilot
 
+sources/ (cont.)
+  gmail.py       one label, impersonated service account, scrubbed
+  happyscribe.py transcripts synced from a folder
+
 pipeline/
+  scrub.py       anonymise conversational text BEFORE it is stored
   claims.py      LLM claim extraction + canonical clustering
   score.py       ranking
   brief.py       angle → script + shot direction, markdown render
@@ -124,10 +132,32 @@ objection and almost no ad addresses it.
 **6. Boosted posts are excluded from engagement scoring** but their text
 still feeds claim extraction. Their metrics blend organic and paid.
 
-**7. OAuth for clients, service accounts only for self-runs.** A service
-account makes the client add an email inside two Google consoles by
-hand, with no error feedback — the highest-abandon step in onboarding.
-Do not "simplify" back to service accounts.
+**7. OAuth for clients, a delegated service account for self-runs.** For
+a client, a service account would mean adding an email inside two Google
+consoles by hand with no error feedback — the highest-abandon step in
+onboarding. Do not "simplify" client onboarding back to service accounts.
+
+For your own accounts the reverse holds, for two reasons that are not
+obvious. An OAuth app in Testing status issues refresh tokens that expire
+after **seven days**, so self-runs would need re-consenting weekly
+forever; and Gmail's scope is restricted enough that leaving Testing
+requires a third-party security audit. A service account with
+domain-wide delegation has neither problem, and because it impersonates
+you it inherits your own property access — so the two-console step
+disappears entirely rather than being tolerated.
+
+**10. Gmail is bounded to one label, and scrubbed before storage.** Never
+the whole mailbox, never a search query. A label is a deliberate decision
+about which threads are customer conversations and is explicable to
+anyone who asks what was ingested. `pipeline/scrub.py` strips names,
+addresses, phone numbers, signature blocks and quoted chains on the way
+in, so the raw body is never written down.
+
+**11. Quoted reply chains are stripped for a scoring reason, not only a
+privacy one.** A five-message thread quotes itself, so the same sentence
+would arrive five times — and recurrence across independent signals is
+the largest single input to the ranking. Leaving quotes in would inflate
+exactly the number the product turns on.
 
 **8. Delegation links stay.** The commonest reason onboarding dies is
 that the person clicking doesn't hold the credentials. Every connect

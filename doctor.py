@@ -65,9 +65,9 @@ def check_meta(rep, conn, account):
 
     if not token:
         rep.add(SKIP, "meta", "not configured",
-                "Set META_TOKEN and META_PAGE_ID, or connect via\n"
-                "`python onboard.py`. This is the required source —\n"
-                "comment threads are the highest-signal input.")
+                "Run `python run.py --account <acct> connect` and click\n"
+                "Connect. This is the required source — comment threads\n"
+                "are the highest-signal input in the corpus.")
         return
     if not page_id:
         rep.add(FAIL, "meta", "token present, no page id",
@@ -301,6 +301,91 @@ def check_transcripts(rep):
             f"{len(speakers)} speakers")
 
 
+def check_gmail(rep, conn, account):
+    import auth
+
+    settings = auth.get_settings(conn, account, "gmail")
+    label_id = settings.get("label_id")
+    subject = settings.get("impersonate") or config.GMAIL_USER
+
+    if not config.GOOGLE_CREDENTIALS:
+        rep.add(SKIP, "gmail", "no service account configured")
+        return
+    if not subject:
+        rep.add(SKIP, "gmail", "no user to impersonate",
+                "Set GOOGLE_IMPERSONATE to your Workspace address.\n"
+                "The service account has no mailbox of its own.")
+        return
+    if not label_id:
+        rep.add(SKIP, "gmail", "no label chosen",
+                "Gmail is never read unbounded. Pick a label at\n"
+                "/connect/gmail, or run `connect`.")
+        return
+
+    from sources import gmail
+    try:
+        service, _ = gmail._service(conn, account)
+        resp = service.users().messages().list(
+            userId="me", labelIds=[label_id], maxResults=1,
+        ).execute()
+    except Exception as e:
+        text = str(e)
+        if "unauthorized_client" in text:
+            rep.add(FAIL, "gmail", "delegation not authorised",
+                    "The Admin console step is missing, or the scopes\n"
+                    "there do not include gmail.readonly. Run `setup`.")
+        elif "not found" in text.lower() or "invalidArgument" in text:
+            rep.add(FAIL, "gmail", f"label {label_id} no longer exists",
+                    "It was renamed or deleted. Pick it again.")
+        else:
+            rep.add(FAIL, "gmail", text[:200])
+        return
+
+    n = resp.get("resultSizeEstimate", 0)
+    label = settings.get("label_name", label_id)
+    if n:
+        rep.add(OK, "gmail", f"label '{label}' readable as {subject}")
+    else:
+        rep.add(WARN, "gmail", f"label '{label}' is empty",
+                "Access works. Nothing is tagged with it yet.")
+
+
+def check_happyscribe(rep, conn, account):
+    import auth
+
+    settings = auth.get_settings(conn, account, "happyscribe")
+    if not settings.get("api_key"):
+        rep.add(SKIP, "happyscribe", "not connected")
+        return
+
+    from sources import happyscribe
+    try:
+        happyscribe.verify(settings["api_key"])
+    except Exception as e:
+        rep.add(FAIL, "happyscribe", str(e)[:200],
+                "A 401 means the key was revoked or mistyped.")
+        return
+
+    folder = settings.get("folder_id")
+    rep.add(OK, "happyscribe",
+            f"key valid, folder {folder or 'not set (reads everything)'}")
+
+
+def check_trustpilot_connected(rep, conn, account):
+    import auth
+
+    settings = auth.get_settings(conn, account, "trustpilot")
+    if not settings.get("api_key"):
+        check_trustpilot(rep)          # fall back to the env-var path
+        return
+    if not settings.get("business_unit_id"):
+        rep.add(FAIL, "trustpilot", "key stored, no business unit resolved",
+                "Add your domain at /connect/trustpilot/configure.")
+        return
+    rep.add(OK, "trustpilot",
+            f"{settings.get('display_name') or settings['business_unit_id']}")
+
+
 def check_email_csv(rep):
     path = os.getenv("ANGLE_EMAIL_CSV", "")
     if not path:
@@ -333,7 +418,9 @@ def run(conn, account):
     check_meta(rep, conn, account)
     check_gsc(rep, conn, account)
     check_ga4(rep, conn, account)
+    check_gmail(rep, conn, account)
+    check_happyscribe(rep, conn, account)
     check_transcripts(rep)
     check_email_csv(rep)
-    check_trustpilot(rep)
+    check_trustpilot_connected(rep, conn, account)
     return rep

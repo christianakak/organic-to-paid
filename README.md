@@ -12,16 +12,35 @@ It does not generate ads. It tells you what to film.
 ```bash
 uv venv --python 3.12
 uv pip install -r requirements.txt
-cp env.example .env       # fill in
+
+python run.py --account bty setup      # once per machine
+python run.py --account bty connect    # once per account
 ```
 
-The template is `env.example` rather than `.env.example` for a local
-tooling reason, not a principled one. Rename it if you like.
+`setup` registers the two provider apps you need — a Meta app and a
+Google service account — walking through the exact clicks with your
+redirect URI and delegation scopes pre-filled. Every step ends with a
+live call that proves the credential works, because all of these fail by
+returning nothing rather than by erroring. It writes to `.env` and skips
+anything already verified, so re-running it is safe.
 
-Then, before anything else:
+`connect` opens a page where each source is one click or one paste.
+Counts appear in the terminal as data lands.
+
+**Google is a service account here, not a sign-in button, and that is
+deliberate.** An OAuth app in Testing status issues refresh tokens that
+expire after seven days, and Gmail's scope is restricted enough that
+leaving Testing needs a third-party security audit — you would be
+re-consenting weekly, indefinitely. A service account with domain-wide
+delegation never expires, and because it impersonates you it inherits
+your own property access, which removes the step where you add an email
+by hand inside two Google consoles and get no feedback when it's wrong.
+OAuth remains the right door for clients, who aren't on your Workspace.
+
+Then, before every pull:
 
 ```bash
-python run.py --account self doctor
+python run.py --account bty doctor
 ```
 
 `doctor` probes every configured source and reads at least one real row
@@ -197,16 +216,28 @@ neither provider allows non-local http redirects.
 
 
 
-| Source | What it gives | Status |
+| Source | What it gives | How you connect it |
 |---|---|---|
-| Meta Page + IG posts | captions, reach, saves, shares | wired |
-| **Meta comments** | **the highest-signal Meta text** | wired |
-| GSC | search queries — demand vocabulary | wired |
-| GA4 landing pages | conversion proximity weighting | wired |
-| GA4 site search | what people couldn't find | wired |
-| **Call transcripts** | **objections said out loud** | wired (drop files in `data/transcripts/`) |
-| Email subject lines | pre-run hook tests with open rates | wired (CSV export) |
-| Trustpilot | reviews via sanctioned API | wired |
+| Meta Page + IG posts | captions, reach, saves, shares | one click |
+| **Meta comments** | **the highest-signal Meta text** | comes with the above |
+| GSC | search queries — demand vocabulary | service account, no per-property grant |
+| GA4 landing pages | conversion proximity weighting | same service account |
+| GA4 site search | what people couldn't find | same service account |
+| **Gmail** | **customers writing to you at length** | pick one label |
+| **Call transcripts** | **objections said out loud** | HappyScribe key, pick a folder |
+| Trustpilot | reviews via sanctioned API | paste your domain |
+| Email CSV | subject lines with open rates | legacy; file path |
+
+Everything conversational — Gmail, transcripts, reviews, Meta comments —
+passes through `pipeline/scrub.py` before it is stored. Email addresses,
+phone numbers, greeting names, signature blocks and quoted reply chains
+are removed on the way in, so the raw text is never written down.
+
+That last one is not only a privacy measure. A five-message email thread
+quotes itself, so the same sentence would be ingested five times — and
+recurrence across independent signals is the largest single input to the
+ranking. Leaving quoted text in would inflate exactly the number this
+whole product turns on.
 
 The pattern worth noticing: the best sources are conversational, not
 broadcast. Posts are the brand talking. Comments, calls, searches and
